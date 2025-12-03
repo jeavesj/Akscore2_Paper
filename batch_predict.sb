@@ -1,0 +1,39 @@
+#!/bin/bash --login
+#SBATCH --job-name=AKScore2
+#SBATCH --time=1:00:00
+#SBATCH --cpus-per-task=1
+#SBATCH --gpus=h200:1
+#SBATCH --mem=8G
+# #SBATCH --array=0-3
+# #SBATCH --output=slurm-%A_%a.out
+# #SBATCH --error=slurm-%A_%a.err
+
+set -euo pipefail
+
+module purge
+module load Miniforge3
+
+conda activate akscore2_cu126
+
+INPUT_CSV='/mnt/scratch/jeaves/Akscore2_Paper/test2016.csv'  # Format: pdbid,-logKd/Ki
+
+while IFS=',' read -r pdb_id target; do
+  if [[ "$pdb_id" == "pdbid" ]]; then
+    continue
+  fi
+
+  receptor_path="/mnt/scratch/jeaves/Akscore2_Paper/coreset/$pdb_id/${pdb_id}_protein.pdb"
+  ligand_mol2_path="/mnt/scratch/jeaves/Akscore2_Paper/coreset/$pdb_id/${pdb_id}_ligand.mol2"
+  ligand_pdb_path="/mnt/scratch/jeaves/Akscore2_Paper/coreset/$pdb_id/${pdb_id}_ligand.pdb"
+  pred_output_csv="/mnt/scratch/jeaves/Akscore2_Paper/coreset/$pdb_id/pred.csv"
+
+  echo "running mol2pdb for $pdb_id"
+  python3 convert_mol2pdb.py -l $ligand_mol2_path -o $ligand_pdb_path
+  
+  echo "running akscore2 for $pdb_id"
+  python3 akscore2_run.py --receptor_path $receptor_path --ligand_path $ligand_pdb_path --output $pred_output_csv
+
+done < "$INPUT_CSV"
+
+
+
