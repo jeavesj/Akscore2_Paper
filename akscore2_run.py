@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 from construct_pyg_graph import pdb_list_cut, make_graph
 from akscore2_models import Akscore2_DockC, Akscore2_DockS, Akscore2_NonDock
-
+import time
 
 class akscore2_dataset(Dataset):
     def __init__(self, receptor_path, ligand_path):
@@ -89,6 +89,8 @@ if __name__ == "__main__" :
             print("gpu is not available, run on cpu")
             device = torch.device("cpu")
 
+    t0 = time.time()
+    
     model_nondock = Akscore2_NonDock().to(device)
     ch_nondock = torch.load(args.akscore2_nondock_weight_path, map_location=device)
 
@@ -113,13 +115,14 @@ if __name__ == "__main__" :
         "akscore2_nondock": [],
         "akscore2_dock": [],
         "akscore2_ens": [],
+        "time_s": [],
     }
     with torch.no_grad():
         for idx, (graph_batch, protein_graph_batch, ligand_graph_batch, error_graph_tag_batch) in enumerate(loader):
             graph_batch.to(device)
             protein_graph_batch.to(device)
             ligand_graph_batch.to(device)
-            print(f"{idx}/{len(loader)}")
+            # print(f"{idx}/{len(loader)}")
             pred_nondock = model_nondock(protein_graph_batch, ligand_graph_batch)
             pred_nondock_sigmoid = torch.sigmoid(pred_nondock)
 
@@ -140,11 +143,13 @@ if __name__ == "__main__" :
             pred_dock_b[error_graph_tag_batch==0] = np.nan
             pred_ens[error_graph_tag_batch==0] = np.nan
 
-
+            t1 = time.time()
+            
             result_dict["akscore2_nondock"].extend(pred_nondock_sigmoid.tolist())
             result_dict["akscore2_dock"].extend(pred_dock_b.tolist())
             result_dict["akscore2_ens"].extend(pred_ens.tolist())
-
+            result_dict["time_s"].extend([t1-t0])
+            
     result_df = pd.DataFrame(result_dict)
     result_df = result_df.round(4)
     result_df.to_csv(args.output, sep='\t',na_rep='NaN', index=False)
